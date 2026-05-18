@@ -1,0 +1,324 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+struct clientData
+{
+    int acctNum;
+    char name[30];
+    double balance;
+    int pin;
+    int failedAttempts;
+};
+
+
+int menu();
+
+void add(FILE *fp);
+void display(FILE *fp);
+void update(FILE *fp);
+void deleteRec(FILE *fp);
+
+void totalBalance(FILE *fp);
+void countAccounts(FILE *fp);
+
+void fraudDetection(FILE *fp);
+void accountSecurity(FILE *fp);
+void miniStatement(FILE *fp);
+
+int main()
+{
+    FILE *fp;
+
+    fp = fopen("bank.dat", "rb+");
+
+    if (fp == NULL)
+        fp = fopen("bank.dat", "wb+");
+
+    int choice;
+
+    while ((choice = menu()) != 9)
+    {
+        switch (choice)
+        {
+        case 1:
+            add(fp);
+            break;
+
+        case 2:
+            display(fp);
+            break;
+
+        case 3:
+            update(fp);
+            break;
+
+        case 4:
+            deleteRec(fp);
+            break;
+
+        case 5:
+            totalBalance(fp);
+            break;
+
+        case 6:
+            countAccounts(fp);
+            break;
+
+        case 7:
+            fraudDetection(fp);
+            break;
+
+        case 8:
+            accountSecurity(fp);
+            break;
+
+        default:
+            printf("Invalid choice\n");
+        }
+    }
+
+    fclose(fp);
+
+    return 0;
+}
+
+
+int menu()
+{
+    int ch;
+
+    printf("\n===== BANK MANAGEMENT SYSTEM =====\n");
+
+    printf("1. Add Account\n");
+    printf("2. Display Accounts\n");
+    printf("3. Deposit / Withdraw\n");
+    printf("4. Delete Account\n");
+    printf("5. Total Balance\n");
+    printf("6. Count Accounts\n");
+    printf("7. Fraud Detection\n");
+    printf("8. Security Check\n");
+    printf("9. Exit\n");
+
+    printf("Enter choice: ");
+    scanf("%d", &ch);
+
+    return ch;
+}
+
+
+void add(FILE *fp)
+{
+    struct clientData c;
+
+    printf("Enter Account Number: ");
+    scanf("%d", &c.acctNum);
+
+    printf("Enter Name: ");
+    scanf("%s", c.name);
+
+    printf("Enter Balance: ");
+    scanf("%lf", &c.balance);
+
+    printf("Set 4 Digit PIN: ");
+    scanf("%d", &c.pin);
+
+    c.failedAttempts = 0;
+
+    fseek(fp, (c.acctNum - 1) * sizeof(c), SEEK_SET);
+
+    fwrite(&c, sizeof(c), 1, fp);
+
+    printf("Account Added Successfully\n");
+}
+
+
+void display(FILE *fp)
+{
+    struct clientData c;
+
+    rewind(fp);
+
+    printf("\nAccNo\tName\tBalance\n");
+
+    while (fread(&c, sizeof(c), 1, fp))
+    {
+        if (c.acctNum != 0)
+        {
+            printf("%d\t%s\t%.2lf\n",
+                   c.acctNum,
+                   c.name,
+                   c.balance);
+        }
+    }
+}
+
+
+void update(FILE *fp)
+{
+    struct clientData c;
+
+    int acc;
+    int pin;
+    double amt;
+
+    printf("Enter Account Number: ");
+    scanf("%d", &acc);
+
+    fseek(fp, (acc - 1) * sizeof(c), SEEK_SET);
+
+    fread(&c, sizeof(c), 1, fp);
+
+    if (c.acctNum == 0)
+    {
+        printf("Account Not Found\n");
+        return;
+    }
+
+    printf("Enter PIN: ");
+    scanf("%d", &pin);
+
+    if (pin != c.pin)
+    {
+        c.failedAttempts++;
+
+        printf("Wrong PIN!\n");
+
+        fseek(fp, -sizeof(c), SEEK_CUR);
+        fwrite(&c, sizeof(c), 1, fp);
+
+        return;
+    }
+
+    c.failedAttempts = 0;
+
+    printf("Current Balance: %.2lf\n", c.balance);
+
+    printf("Enter Amount (+ Deposit / - Withdraw): ");
+    scanf("%lf", &amt);
+
+    
+    if (amt < -50000)
+    {
+        printf("Fraud Alert! Large Withdrawal Detected\n");
+        return;
+    }
+
+    if (c.balance + amt < 0)
+    {
+        printf("Insufficient Balance\n");
+        return;
+    }
+
+    c.balance += amt;
+
+    fseek(fp, -sizeof(c), SEEK_CUR);
+
+    fwrite(&c, sizeof(c), 1, fp);
+
+    printf("Transaction Successful\n");
+
+    miniStatement(fp);
+}
+
+
+void deleteRec(FILE *fp)
+{
+    struct clientData c = {0, "", 0, 0, 0};
+
+    int acc;
+
+    printf("Enter Account Number: ");
+    scanf("%d", &acc);
+
+    fseek(fp, (acc - 1) * sizeof(c), SEEK_SET);
+
+    fwrite(&c, sizeof(c), 1, fp);
+
+    printf("Account Deleted Successfully\n");
+}
+
+
+void totalBalance(FILE *fp)
+{
+    struct clientData c;
+
+    double total = 0;
+
+    rewind(fp);
+
+    while (fread(&c, sizeof(c), 1, fp))
+    {
+        if (c.acctNum != 0)
+            total += c.balance;
+    }
+
+    printf("Total Balance in Bank = %.2lf\n", total);
+}
+
+
+void countAccounts(FILE *fp)
+{
+    struct clientData c;
+
+    int count = 0;
+
+    rewind(fp);
+
+    while (fread(&c, sizeof(c), 1, fp))
+    {
+        if (c.acctNum != 0)
+            count++;
+    }
+
+    printf("Total Accounts = %d\n", count);
+}
+
+void fraudDetection(FILE *fp)
+{
+    struct clientData c;
+
+    rewind(fp);
+
+    printf("\nAccounts With Suspicious Balance:\n");
+
+    while (fread(&c, sizeof(c), 1, fp))
+    {
+        if (c.acctNum != 0 && c.balance > 1000000)
+        {
+            printf("Fraud Check Needed -> ");
+            printf("%d %s %.2lf\n",
+                   c.acctNum,
+                   c.name,
+                   c.balance);
+        }
+    }
+}
+
+void accountSecurity(FILE *fp)
+{
+    struct clientData c;
+
+    rewind(fp);
+
+    printf("\nBlocked / Risk Accounts:\n");
+
+    while (fread(&c, sizeof(c), 1, fp))
+    {
+        if (c.acctNum != 0 && c.failedAttempts >= 3)
+        {
+            printf("Account Locked -> ");
+            printf("%d %s\n",
+                   c.acctNum,
+                   c.name);
+        }
+    }
+}
+
+
+void miniStatement(FILE *fp)
+{
+    printf("\n===== MINI STATEMENT =====\n");
+    printf("Transaction Completed Successfully\n");
+    printf("Thank You For Banking\n");
+}
